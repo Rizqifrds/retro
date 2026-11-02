@@ -1,0 +1,8 @@
+target/
+.tools/
+data/
+config.properties
+.idea/
+*.iml
+tmp/
+dist/
