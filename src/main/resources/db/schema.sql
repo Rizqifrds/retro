@@ -6,6 +6,10 @@ CREATE TABLE IF NOT EXISTS classes (
  id BIGINT AUTO_INCREMENT PRIMARY KEY, lecturer_id BIGINT NOT NULL, name VARCHAR(160) NOT NULL,
  join_code VARCHAR(12) NOT NULL UNIQUE, FOREIGN KEY (lecturer_id) REFERENCES users(id)
 );
+CREATE TABLE IF NOT EXISTS account_identities (
+ user_id BIGINT PRIMARY KEY, academic_id VARCHAR(32) NOT NULL, role VARCHAR(20) NOT NULL,
+ UNIQUE (role, academic_id), FOREIGN KEY (user_id) REFERENCES users(id)
+);
 CREATE TABLE IF NOT EXISTS class_members (
  id BIGINT AUTO_INCREMENT PRIMARY KEY, class_id BIGINT NOT NULL, student_id BIGINT NOT NULL,
  archetype VARCHAR(30) NOT NULL DEFAULT 'Code Warrior', exp_total INT NOT NULL DEFAULT 0 CHECK (exp_total >= 0),
@@ -29,6 +33,12 @@ CREATE TABLE IF NOT EXISTS submissions (
  reviewed_by BIGINT, reviewed_at TIMESTAMP NULL,
  UNIQUE (quest_id, student_id, version), FOREIGN KEY (quest_id) REFERENCES quests(id),
  FOREIGN KEY (student_id) REFERENCES users(id), FOREIGN KEY (reviewed_by) REFERENCES users(id)
+);
+CREATE TABLE IF NOT EXISTS quest_work (
+ quest_id BIGINT NOT NULL, student_id BIGINT NOT NULL,
+ work_status VARCHAR(20) NOT NULL CHECK (work_status IN ('NOT_STARTED','IN_PROGRESS','COMPLETED')),
+ PRIMARY KEY (quest_id, student_id), FOREIGN KEY (quest_id) REFERENCES quests(id),
+ FOREIGN KEY (student_id) REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS ai_evaluations (
  id BIGINT AUTO_INCREMENT PRIMARY KEY, submission_id BIGINT NOT NULL, status VARCHAR(20) NOT NULL,

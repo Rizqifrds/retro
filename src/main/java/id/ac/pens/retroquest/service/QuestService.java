@@ -148,14 +148,50 @@ public final class QuestService {
     return db.read(
         c -> {
           var room = access(c, u, classId);
-          return list(
-              c,
-              "SELECT q.*,m.title AS module_title FROM quests q JOIN learning_modules m ON"
-                  + " m.id=q.module_id WHERE m.class_id=?"
-                  + (room.id("lecturer_id") == u.id() ? "" : " AND q.status='PUBLISHED'")
-                  + " ORDER BY q.deadline,q.id",
-              classId);
+          var quests =
+              list(
+                  c,
+                  "SELECT q.*,m.title AS module_title,COALESCE(w.work_status,'NOT_STARTED') AS"
+                      + " work_status FROM quests q JOIN learning_modules m ON m.id=q.module_id"
+                      + " LEFT JOIN quest_work w ON w.quest_id=q.id AND w.student_id=? WHERE"
+                      + " m.class_id=?"
+                      + (room.id("lecturer_id") == u.id() ? "" : " AND q.status='PUBLISHED'")
+                      + " ORDER BY q.id",
+                  u.id(),
+                  classId);
+          var now = LocalDateTime.now();
+          quests.sort(
+              Comparator.comparing((Row q) -> "DRAFT".equals(q.text("status")))
+                  .thenComparing(q -> WorkStatus.COMPLETED.name().equals(q.text("work_status")))
+                  .thenComparing(q -> QuestPriority.fromDeadline(q.time("deadline"), now))
+                  .thenComparing(q -> q.time("deadline")));
+          return quests;
         });
+  }
+
+  public void updateWorkStatus(User student, long questId, WorkStatus status) {
+    require(status != null, "Pilih status pengerjaan.");
+    db.transaction(
+        c -> {
+          role(c, student, "STUDENT");
+          Row quest = quest(c, questId);
+          require("PUBLISHED".equals(quest.text("status")), "Quest belum dipublikasikan.");
+          one(
+              c,
+              "SELECT id FROM class_members WHERE class_id=? AND student_id=?",
+              quest.id("class_id"),
+              student.id());
+          update(
+              c,
+              "INSERT INTO quest_work(quest_id,student_id,work_status) VALUES(?,?,?)"
+                  + " ON DUPLICATE KEY UPDATE work_status=?",
+              questId,
+              student.id(),
+              status.name(),
+              status.name());
+          return null;
+        });
+    changed();
   }
 
   public Row detail(User u, long questId) {

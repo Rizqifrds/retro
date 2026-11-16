@@ -46,3 +46,5 @@
 .progress-bar > .bar { -fx-background-color: #79e6c4; -fx-background-radius: 6; -fx-background-insets: 0; }
 .check-box { -fx-text-fill: #dce8f7; }
 .combo-box .list-cell { -fx-text-fill: #dce8f7; -fx-padding: 9 12; }
+.priority-urgent, .priority-overdue { -fx-text-fill: #fda4af; -fx-background-color: #462335; }
+.priority-high { -fx-text-fill: #fde68a; -fx-background-color: #493a23; }

@@ -36,6 +36,10 @@ public final class MainController {
   private Label status = new Label("Siap");
   private ComboBox<Row> rooms;
   private String page = "Dashboard";
+  private String questSearch = "";
+  private String questPublication = "Semua";
+  private String questWork = "Semua progres";
+  private final Map<Long, WorkStatus> unsavedWorkStatuses = new HashMap<>();
   private Timeline refreshTimer;
   private boolean busy;
   private int requestId;
@@ -52,7 +56,6 @@ public final class MainController {
   public void start(Stage stage, Database db) {
     this.stage = stage;
     this.db = db;
-    auth = new AuthService(db);
     service = new QuestService(db);
     service.observe(
         () ->
@@ -63,9 +66,12 @@ public final class MainController {
         "Menyiapkan database",
         () -> {
           db.initialize();
-          return true;
+          return new AuthService(db);
         },
-        ok -> login());
+        authentication -> {
+          auth = authentication;
+          login();
+        });
     stage.setOnCloseRequest(
         e -> {
           if (refreshTimer != null) refreshTimer.stop();
@@ -194,6 +200,10 @@ public final class MainController {
   private void login() {
     user = null;
     room = null;
+    questSearch = "";
+    questPublication = "Semua";
+    questWork = "Semua progres";
+    unsavedWorkStatuses.clear();
     if (refreshTimer != null) refreshTimer.stop();
     root.setTop(null);
     root.setLeft(null);
@@ -213,7 +223,7 @@ public final class MainController {
     intro.setPadding(new Insets(50));
     intro.setPrefWidth(600);
     intro.getStyleClass().add("login-intro");
-    var email = field("nama@email.com", "");
+    var email = field("nama.student@kampus.ac.id", "");
     var password = new PasswordField();
     password.setPromptText("Minimal 8 karakter");
     var name = field("Nama lengkap", "");
@@ -221,6 +231,25 @@ public final class MainController {
     role.getItems().addAll("Mahasiswa / Player", "Dosen / Game Master");
     role.getSelectionModel().selectFirst();
     role.setMaxWidth(Double.MAX_VALUE);
+    var academicId = field("10 angka NIM", "");
+    var identityLabel = label("NIM MAHASISWA", "field-label");
+    role.valueProperty()
+        .addListener(
+            (o, oldRole, newRole) -> {
+              boolean lecturer = role.getSelectionModel().getSelectedIndex() == 1;
+              identityLabel.setText(lecturer ? "NIP / NIDN DOSEN" : "NIM MAHASISWA");
+              academicId.clear();
+              academicId.setPromptText(lecturer ? "ID pada daftar dosen" : "10 angka NIM");
+              email.setPromptText(
+                  lecturer ? "nama.lecturer@kampus.ac.id" : "nama.student@kampus.ac.id");
+            });
+    var registration =
+        column(
+            input("NAMA LENGKAP", name),
+            input("PERAN", role),
+            new VBox(6, identityLabel, academicId));
+    registration.setManaged(false);
+    registration.setVisible(false);
     var form =
         column(
             label("Selamat datang, adventurer.", "heading"),
@@ -231,19 +260,23 @@ public final class MainController {
         button(
             "Masuk ke guild  →",
             "primary",
-            () ->
+            () -> {
+              String address = email.getText();
+              String secret = password.getText();
+              if (registration.isVisible()) {
+                String fullName = name.getText();
+                String id = academicId.getText();
+                boolean lecturer = role.getSelectionModel().getSelectedIndex() == 1;
                 async(
-                    "Memeriksa akun",
-                    () -> auth.login(email.getText(), password.getText()),
-                    u -> {
-                      user = u;
-                      shell();
-                    }));
+                    "Membuat akun",
+                    () -> auth.register(fullName, address, secret, lecturer, id),
+                    this::enter);
+              } else {
+                signIn(address, secret);
+              }
+            });
     submit.setMaxWidth(Double.MAX_VALUE);
     submit.setDefaultButton(true);
-    var registration = column(input("NAMA LENGKAP", name), input("PERAN", role));
-    registration.setManaged(false);
-    registration.setVisible(false);
     var toggle =
         button(
             "Belum punya akun? Daftar",
@@ -253,24 +286,6 @@ public final class MainController {
               registration.setVisible(visible);
               registration.setManaged(visible);
               submit.setText(visible ? "Buat akun" : "Masuk ke guild  →");
-              submit.setOnAction(
-                  e ->
-                      safe(
-                          () ->
-                              async(
-                                  visible ? "Membuat akun" : "Memeriksa akun",
-                                  () ->
-                                      visible
-                                          ? auth.register(
-                                              name.getText(),
-                                              email.getText(),
-                                              password.getText(),
-                                              role.getSelectionModel().getSelectedIndex() == 1)
-                                          : auth.login(email.getText(), password.getText()),
-                                  u -> {
-                                    user = u;
-                                    shell();
-                                  })));
             });
     form.getChildren()
         .addAll(
@@ -288,9 +303,62 @@ public final class MainController {
     form.setMaxWidth(470);
     form.setPadding(new Insets(35));
     var holder = new StackPane(form);
-    HBox.setHgrow(holder, Priority.ALWAYS);
-    var layout = new HBox(intro, holder);
+    var loginPane = scroll(holder);
+    loginPane.setFitToHeight(true);
+    HBox.setHgrow(loginPane, Priority.ALWAYS);
+    var layout = new HBox(intro, loginPane);
     root.setCenter(layout);
+  }
+
+  private void enter(User account) {
+    user = account;
+    shell();
+  }
+
+  private void signIn(String email, String password) {
+    async(
+        "Memeriksa akun",
+        () -> {
+          try {
+            return auth.login(email, password);
+          } catch (AuthService.IdentityRequiredException e) {
+            return null;
+          }
+        },
+        account -> {
+          if (account != null) enter(account);
+          else completeIdentity(email, password);
+        });
+  }
+
+  private void completeIdentity(String oldEmail, String password) {
+    var email =
+        field("nama.student@kampus.ac.id atau nama.lecturer@kampus.ac.id", oldEmail.strip());
+    var academicId = field("NIM mahasiswa atau NIP / NIDN dosen", "");
+    var body =
+        column(
+            label("Lengkapi identitas akun lama Anda agar dapat melanjutkan.", "heading"),
+            label(
+                "Gunakan penanda student atau lecturer pada bagian nama email sesuai peran akun.",
+                "muted"),
+            input("EMAIL AKADEMIK", email),
+            input("IDENTITAS AKADEMIK", academicId));
+    var dialog = dialog("Lengkapi identitas akun", body, "Simpan dan masuk");
+    intercept(
+        dialog,
+        () -> {
+          String address = email.getText();
+          String id = academicId.getText();
+          dialogTask(
+              dialog,
+              "Memvalidasi identitas",
+              () -> auth.completeIdentity(oldEmail, password, address, id),
+              account -> {
+                dialog.close();
+                enter(account);
+              });
+        });
+    dialog.showAndWait();
   }
 
   private void demo(boolean teacher) {
@@ -298,13 +366,9 @@ public final class MainController {
         "Menyiapkan demo",
         () -> {
           DemoData.seed(db);
-          return auth.login(
-              teacher ? "dosen@retroquest.demo" : "mahasiswa@retroquest.demo", DemoData.PASSWORD);
+          return DemoData.login(db, teacher);
         },
-        u -> {
-          user = u;
-          shell();
-        });
+        this::enter);
   }
 
   private void shell() {
@@ -390,6 +454,7 @@ public final class MainController {
                   if (!busy
                       && stage.isShowing()
                       && !(stage.getScene().getFocusOwner() instanceof TextInputControl)
+                      && !(stage.getScene().getFocusOwner() instanceof ComboBoxBase<?>)
                       && Window.getWindows().stream().noneMatch(w -> w != stage && w.isShowing()))
                     refresh();
                 }));
@@ -643,11 +708,14 @@ public final class MainController {
               row(
                   button("+ Buat quest", "primary", () -> questEditor(null, s.modules())),
                   button("+ Tambah materi", "secondary", this::moduleEditor)));
-    var search = field("Cari judul quest…", "");
+    var search = field("Cari judul quest…", questSearch);
     var filter = new ComboBox<String>();
     filter.getItems().addAll("Semua", "PUBLISHED", "DRAFT");
-    filter.getSelectionModel().selectFirst();
-    if (!user.isLecturer()) filter.getItems().remove("DRAFT");
+    filter.setValue(questPublication);
+    var workFilter = new ComboBox<String>();
+    workFilter.getItems().add("Semua progres");
+    for (WorkStatus value : WorkStatus.values()) workFilter.getItems().add(value.toString());
+    workFilter.setValue(questWork);
     var list = column();
     Runnable draw =
         () -> {
@@ -660,17 +728,47 @@ public final class MainController {
                           .contains(search.getText().toLowerCase(Locale.ROOT)))
               .filter(
                   q ->
-                      filter.getValue().equals("Semua")
+                      !user.isLecturer()
+                          || filter.getValue().equals("Semua")
                           || q.text("status").equals(filter.getValue()))
+              .filter(
+                  q ->
+                      user.isLecturer()
+                          || workFilter.getValue().equals("Semua progres")
+                          || workStatus(q).toString().equals(workFilter.getValue()))
               .forEach(q -> list.getChildren().add(questTile(q, s)));
           if (list.getChildren().isEmpty())
             list.getChildren().add(empty("Tidak ada quest yang sesuai."));
         };
-    search.textProperty().addListener((o, a, b) -> draw.run());
-    filter.setOnAction(e -> draw.run());
+    search
+        .textProperty()
+        .addListener(
+            (o, a, b) -> {
+              questSearch = b;
+              draw.run();
+            });
+    filter.setOnAction(
+        e -> {
+          questPublication = filter.getValue();
+          draw.run();
+        });
+    workFilter.setOnAction(
+        e -> {
+          questWork = workFilter.getValue();
+          draw.run();
+        });
     HBox.setHgrow(search, Priority.ALWAYS);
-    content.getChildren().addAll(row(search, filter), list);
+    content
+        .getChildren()
+        .addAll(
+            row(search, user.isLecturer() ? filter : workFilter),
+            label("Mendesak dalam 48 jam · Tinggi dalam 7 hari", "muted"),
+            list);
     draw.run();
+  }
+
+  private static WorkStatus workStatus(Row quest) {
+    return WorkStatus.valueOf(quest.text("work_status"));
   }
 
   private VBox questTile(Row q, Snapshot s) {
@@ -682,7 +780,14 @@ public final class MainController {
               .findFirst()
               .map(r -> r.text("status"))
               .orElse("BELUM DIKIRIM");
-    var top = row(label(q.text("module_title"), "eyebrow"), spacer(), label(state, "chip"));
+    var top = row(label(q.text("module_title"), "eyebrow"), spacer());
+    if ("PUBLISHED".equals(q.text("status"))) {
+      var priority = QuestPriority.fromDeadline(q.time("deadline"), LocalDateTime.now());
+      var badge = label(priority.toString(), "chip");
+      badge.getStyleClass().add("priority-" + priority.name().toLowerCase(Locale.ROOT));
+      top.getChildren().add(badge);
+    }
+    top.getChildren().add(label(state, "chip"));
     var bottom =
         row(
             label("Tenggat " + DATE.format(q.time("deadline")), "muted"),
@@ -698,11 +803,50 @@ public final class MainController {
                     questEditor(q, s.modules());
                   else questDetail(q);
                 }));
-    return card(
-        top,
-        label(q.text("title"), "heading"),
-        label(shorten(q.text("description"), 180), "muted"),
-        bottom);
+    var tile =
+        card(
+            top,
+            label(q.text("title"), "heading"),
+            label(shorten(q.text("description"), 180), "muted"),
+            bottom);
+    if (!user.isLecturer()) {
+      var saved = workStatus(q);
+      if (page.equals("Quest Board")) {
+        long questId = q.id("id");
+        var selection = new ComboBox<WorkStatus>();
+        selection.getItems().setAll(WorkStatus.values());
+        selection.setValue(unsavedWorkStatuses.getOrDefault(questId, saved));
+        selection
+            .valueProperty()
+            .addListener(
+                (o, previous, selected) -> {
+                  if (selected == saved) unsavedWorkStatuses.remove(questId);
+                  else unsavedWorkStatuses.put(questId, selected);
+                });
+        var save =
+            button(
+                "Simpan status",
+                "secondary",
+                () -> {
+                  WorkStatus selected = selection.getValue();
+                  async(
+                      "Menyimpan status pengerjaan",
+                      () -> {
+                        service.updateWorkStatus(user, questId, selected);
+                        return selected;
+                      },
+                      result -> {
+                        unsavedWorkStatuses.remove(questId);
+                        refresh();
+                      });
+                });
+        save.disableProperty().bind(selection.valueProperty().isEqualTo(saved));
+        tile.getChildren().add(row(label("Status pengerjaan", "muted"), selection, save));
+      } else {
+        tile.getChildren().add(label("Pengerjaan · " + saved, "muted"));
+      }
+    }
+    return tile;
   }
 
   private static String shorten(String text, int length) {

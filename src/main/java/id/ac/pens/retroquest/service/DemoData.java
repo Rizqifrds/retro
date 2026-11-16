@@ -13,15 +13,29 @@ public final class DemoData {
 
   private DemoData() {}
 
+  public static User login(Database db, boolean lecturer) {
+    return new AuthService(db)
+        .login(lecturer ? "dosen@retroquest.demo" : "mahasiswa@retroquest.demo", PASSWORD);
+  }
+
+  static boolean matchesAccount(String email, String role, String password) {
+    return PASSWORD.equals(password)
+        && switch (email) {
+          case "dosen@retroquest.demo" -> role.equals("LECTURER");
+          case "mahasiswa@retroquest.demo", "rifqi@retroquest.demo" -> role.equals("STUDENT");
+          default -> false;
+        };
+  }
+
   public static synchronized void seed(Database db) throws Exception {
     if (db.read(
         c -> !list(c, "SELECT id FROM users WHERE email=?", "dosen@retroquest.demo").isEmpty()))
       return;
     var auth = new AuthService(db);
     var service = new QuestService(db);
-    User teacher = auth.register("Bu Yunia · Demo", "dosen@retroquest.demo", PASSWORD, true);
-    User student = auth.register("Rizqi · Demo", "mahasiswa@retroquest.demo", PASSWORD, false);
-    User other = auth.register("Rifqi · Demo", "rifqi@retroquest.demo", PASSWORD, false);
+    User teacher = auth.registerDemo("Bu Yunia · Demo", "dosen@retroquest.demo", PASSWORD, true);
+    User student = auth.registerDemo("Rizqi · Demo", "mahasiswa@retroquest.demo", PASSWORD, false);
+    User other = auth.registerDemo("Rifqi · Demo", "rifqi@retroquest.demo", PASSWORD, false);
     long room = service.createClass(teacher, "Praktikum PBO · Guild Java");
     String code =
         db.read(c -> one(c, "SELECT join_code FROM classes WHERE id=?", room).text("join_code"));

@@ -21,6 +21,14 @@ java -jar target/retroquest-1.0.0.jar
 
 JAR harus disertai direktori `lib/` di sebelahnya. JavaFX memerlukan lingkungan desktop. Hasil build Windows membawa library JavaFX Windows; build ulang di OS lain untuk library OS tersebut.
 
+## Validasi akun akademik
+
+- **Mahasiswa** memakai NIM 10 digit yang belum terdaftar dan email dengan penanda `student` di bagian nama, misalnya `nama.student@kampus.ac.id`.
+- **Dosen** memakai email dengan penanda `lecturer` dan ID yang cocok dengan daftar dosen. Isi `auth.lecturers` pada `config.properties` sebelum mendaftarkan akun dosen. Formatnya adalah pasangan `email=ID` yang dipisahkan koma. Contoh `auth.lecturers=nama.lecturer@kampus.ac.id=1234567890`. Untuk membatasi kedua peran ke satu domain, isi juga `auth.email.domain=kampus.ac.id`.
+- **Akun lama** dapat masuk dengan email dan kata sandi lama untuk membuka formulir **Lengkapi identitas akun**. Setelah tersimpan, gunakan email yang sudah diperbarui. Kelas, pengumpulan, dan EXP tetap terkait ke ID akun yang sama. Akun demo masih tersedia.
+
+Validasi ini memakai daftar dosen lokal dan pemeriksaan format serta keunikan NIM. Verifikasi kepemilikan email melalui OTP atau layanan kampus belum terhubung.
+
 ## Alur dosen
 
 1. Daftar sebagai **Dosen / Game Master**, masuk, lalu **Buat kelas**.
@@ -36,10 +44,11 @@ Tombol **Buka berkas asli** untuk PDF menampilkan dokumen langsung dalam pembaca
 
 1. Daftar sebagai **Mahasiswa / Player**, gabung menggunakan kode kelas, dan pilih arketipe.
 2. Pelajari kartu NPC di **Materi**, lalu buka quest dan rubriknya.
-3. Unggah tugas sesuai format dan sebelum tenggat. Batas ukuran 20 MB.
-4. Pantau **Riwayat Tugas**. EXP tetap 0 sampai dosen menyetujui. Rekomendasi AI dapat diminta secara opsional.
-5. Jika dosen meminta revisi, unggah lagi sebagai versi baru. Versi lama tetap tersimpan.
-6. Lihat **Profil** dan **Leaderboard**. Level = `1 + EXP / 100` (pembagian bulat), dengan tier 1: level 1–3; tier 2: 4–7; tier 3: 8–10; tier 4: ≥11.
+3. Di **Quest Board**, lihat label prioritas dan pilih **Belum dimulai**, **Sedang dikerjakan**, atau **Selesai**, lalu klik **Simpan status**. Tugas aktif yang belum selesai muncul dari tenggat terdekat, disusul tugas lewat tenggat dan tugas selesai. Tugas dalam 48 jam berlabel **Mendesak** dan tugas setelah 48 jam hingga 7 hari berlabel **Tinggi**. Status ini dicatat per mahasiswa dan quest.
+4. Unggah tugas sesuai format dan sebelum tenggat. Batas ukuran 20 MB.
+5. Pantau **Riwayat Tugas**. EXP diberikan setelah persetujuan dosen. Rekomendasi AI dapat diminta secara opsional.
+6. Jika dosen meminta revisi, unggah lagi sebagai versi baru. Versi lama tetap tersimpan.
+7. Lihat **Profil** dan **Leaderboard**. Level = `1 + EXP / 100` (pembagian bulat), dengan tier 1 untuk level 1–3, tier 2 untuk 4–7, tier 3 untuk 8–10, dan tier 4 mulai level 11.
 
 ## Akun demonstrasi
 
@@ -72,7 +81,7 @@ Untuk beberapa komputer, gunakan MySQL yang sama dan direktori `data.directory` 
 | `.../service` | Autentikasi, quest, EXP, dokumen, OCR, AI, dan data demo |
 | `.../ui` | Controller JavaFX dan factory avatar pixel |
 | `src/main/resources/ui` | Shell FXML dan tema CSS |
-| `src/main/resources/db/schema.sql` | Sembilan tabel beserta foreign key, check, dan unique constraint |
+| `src/main/resources/db/schema.sql` | Skema database, termasuk tabel identitas akun dan progres pengerjaan |
 | `src/test/java` | Pengujian positif, negatif, konkurensi, dan rollback |
 | `docs/RANCANGAN.md` | Sketsa layar, alur, ERD, dan penerapan OOP |
 | `docs/DEMONSTRASI.md` | Panduan presentasi dan skenario uji manual |
@@ -84,7 +93,7 @@ Untuk beberapa komputer, gunakan MySQL yang sama dan direktori `data.directory` 
 
 Persetujuan, transaksi EXP, perubahan total EXP, dan achievement berada dalam **satu transaksi database**. Unique constraint pasangan anggota–quest dan row lock mencegah reward ganda, termasuk saat persetujuan bersamaan. Hanya versi terbaru yang dapat dinilai. Quest terbit dibekukan agar instruksi, reward, dan rubrik yang dilihat mahasiswa tetap konsisten. Mahasiswa tidak dapat membuka submission mahasiswa lain.
 
-Password di-hash dengan PBKDF2-HMAC-SHA256, salt acak, dan 210.000 iterasi. Registrasi dosen terbuka untuk kebutuhan proyek kampus; deployment institusi memerlukan proses pemberian peran dosen oleh administrator. Aplikasi ini belum dilengkapi server distribusi berkas, pemulihan password, migrasi database lintas versi, atau installer bertanda tangan.
+Password di-hash dengan PBKDF2-HMAC-SHA256, salt acak, dan 210.000 iterasi. Aplikasi membuat tabel identitas akun dan progres pengerjaan saat startup pada database yang sudah ada.
 
 ## Rujukan implementasi
 

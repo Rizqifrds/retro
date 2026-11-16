@@ -3,7 +3,7 @@ package id.ac.pens.retroquest;
 import static org.junit.jupiter.api.Assertions.*;
 
 import id.ac.pens.retroquest.dao.Database;
-import id.ac.pens.retroquest.service.AuthService;
+import id.ac.pens.retroquest.model.WorkStatus;
 import id.ac.pens.retroquest.service.DemoData;
 import id.ac.pens.retroquest.service.QuestService;
 import java.awt.image.BufferedImage;
@@ -80,7 +80,7 @@ class GuiSmokeTest {
           for (int y = 0; y < png.getHeight(); y++)
             for (int x = 0; x < png.getWidth(); x++)
               png.setRGB(x, y, image.getPixelReader().getArgb(x, y));
-          Path folder = Path.of("docs/screenshots");
+          Path folder = Path.of(System.getProperty("retroquest.screenshotDir", "docs/screenshots"));
           Files.createDirectories(folder);
           ImageIO.write(png, "png", folder.resolve(name + ".png").toFile());
           return null;
@@ -215,7 +215,7 @@ class GuiSmokeTest {
       pdf.save(sample.toFile());
     }
     try {
-      var student = new AuthService(db).login("mahasiswa@retroquest.demo", DemoData.PASSWORD);
+      var student = DemoData.login(db, false);
       var quests = new QuestService(db);
       long room = quests.classes(student).getFirst().id("id");
       quests.submit(student, quests.quests(student, room).getLast().id("id"), sample);
@@ -247,6 +247,30 @@ class GuiSmokeTest {
         click(screen[0]);
         snapshot(screen[1]);
       }
+      click("Quest Board");
+      fx(
+          () -> {
+            Button save = find(root, "Simpan status");
+            assertNotNull(save);
+            for (Node control : save.getParent().getChildrenUnmodifiable()) {
+              if (control instanceof ComboBox<?> combo) {
+                combo.getSelectionModel().select(WorkStatus.COMPLETED.ordinal());
+              }
+            }
+            assertFalse(save.isDisabled());
+            return null;
+          });
+      click("Materi");
+      click("Quest Board");
+      assertFalse(fx(() -> find(root, "Simpan status").isDisabled()));
+      click("Simpan status");
+      boolean saved =
+          db.read(
+              c ->
+                  !id.ac.pens.retroquest.dao.JdbcDao.list(
+                          c, "SELECT quest_id FROM quest_work WHERE work_status='COMPLETED'")
+                      .isEmpty());
+      assertTrue(saved);
       click("Keluar");
       click("Demo dosen");
       snapshot("08-dashboard-dosen");
