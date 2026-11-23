@@ -1,11 +1,11 @@
 # Status implementasi
 
-Pemeriksaan terakhir 9 November 2026.
+Pemeriksaan terakhir 18 November 2026.
 
 ## Tersedia
 
 - Registrasi dan login dua peran, password PBKDF2, akun demo opsional.
-- Validasi NIM 10 digit dan penanda email untuk mahasiswa. Peran dosen diperiksa menggunakan penanda email dan pasangan email serta ID dalam daftar dosen lokal. Akun lama dapat melengkapi identitas dengan mempertahankan ID akun.
+- Mahasiswa memakai NIM 10 digit serta alamat seperti `nama@student.kampus.ac.id`. Dosen memakai domain dasar seperti `nama@kampus.ac.id`, dengan pasangan email dan ID dalam daftar dosen lokal. Akun lama dapat memperbarui alamat melalui formulir identitas dengan mempertahankan ID akun.
 - Kelas/guild, kode undangan, keanggotaan dan pembatasan akses.
 - Unggah PDF/DOCX, ekstraksi PDFBox/POI, penulisan dan perbaikan materi manual.
 - Integrasi REST AI untuk draf kartu/quest/rubrik dan rekomendasi nilai, dengan validasi keluaran JSON dan konfirmasi sebelum pengiriman teks.
@@ -25,12 +25,12 @@ Perintah lengkap: `mvnw.cmd -q -Dretroquest.guiTest=true test package` melalui P
 
 | Kelompok | Jumlah kasus |
 |---|---:|
-| Aturan bisnis, akses, autentikasi, JDBC, revisi, rollback, konkurensi | 29 |
+| Aturan bisnis, akses, autentikasi, JDBC, revisi, rollback, konkurensi | 30 |
 | Batas EXP / level / tier | 12 |
 | Ekstraksi PDF/DOCX, pembacaan kode statis, validasi rekomendasi | 4 |
 | PDF viewer: render, halaman, karakter path, berkas hilang/rusak, batas ukuran halaman | 5 |
 | Integrasi antarmuka JavaFX (dua peran, halaman dan dialog) | 1 |
-| **Total** | **51** |
+| **Total** | **52** |
 
 Hasil aktual per eksekusi tersedia di `target/surefire-reports/`. Pengujian antarmuka bersifat opt-in karena memerlukan desktop. Screenshot di `docs/screenshots/` berasal dari snapshot scene JavaFX selama tes, bukan gambar mockup. Pengujian menggunakan H2 dengan skema yang sama, terpisah dari akun pengguna pada database persisten.
 

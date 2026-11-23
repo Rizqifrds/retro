@@ -34,15 +34,15 @@ class QuestServiceTest {
     db.initialize();
     auth =
         new AuthService(
-            db, "dosen.lecturer@test.id=DOSEN-1,other.lecturer@test.id=DOSEN-2", "test.id");
+            db, "dosen@test.id=DOSEN-1,other@test.id=DOSEN-2", "test.id");
     service = new QuestService(db);
-    teacher = auth.register("Dosen", "dosen.lecturer@test.id", "Password123!", true, "DOSEN-1");
-    student = auth.register("Mahasiswa", "student@test.id", "Password123!", false, "3125521051");
+    teacher = auth.register("Dosen", "dosen@test.id", "Password123!", true, "DOSEN-1");
+    student = auth.register("Mahasiswa", "nama@student.test.id", "Password123!", false, "3125521051");
     outsider =
         auth.register(
-            "Luar kelas", "outsider.student@test.id", "Password123!", false, "3125521052");
+            "Luar kelas", "outsider@student.test.id", "Password123!", false, "3125521052");
     otherTeacher =
-        auth.register("Dosen lain", "other.lecturer@test.id", "Password123!", true, "DOSEN-2");
+        auth.register("Dosen lain", "other@test.id", "Password123!", true, "DOSEN-2");
     room = service.createClass(teacher, "PBO");
     String code = service.classes(teacher).getFirst().text("join_code");
     service.join(student, code, "Code Warrior");
@@ -92,9 +92,11 @@ class QuestServiceTest {
   void rejectsLecturerRegistrationFromUnapprovedEmail() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("Dosen baru", "new.lecturer@test.id", "Password123!", true, "DOSEN-3"));
-    assertThrows(
-        IllegalArgumentException.class,
+        () -> auth.register("Dosen baru", "baru@test.id", "Password123!", true, "DOSEN-3"));
+    var invalidRoster = new AuthService(db, "baru@student.test.id=DOSEN-3", "");
+    assertThrows(IllegalArgumentException.class,
+        () -> invalidRoster.register("Dosen baru", "baru@student.test.id", "Password123!", true, "DOSEN-3"));
+    assertThrows(IllegalArgumentException.class,
         () -> new AuthService(db, "", "test.id").login(teacher.email(), "Password123!"));
   }
 
@@ -122,29 +124,52 @@ class QuestServiceTest {
         IllegalArgumentException.class,
         () ->
             auth.completeIdentity(
-                "lama@retroquest.demo", "Password123!", "lama.lecturer@test.id", "DOSEN-1"));
+                "lama@retroquest.demo", "Password123!", "lama@test.id", "DOSEN-1"));
     User upgraded =
         auth.completeIdentity(
-            "lama@retroquest.demo", "Password123!", "lama.student@test.id", "3125521053");
+            "lama@retroquest.demo", "Password123!", "lama@student.test.id", "3125521053");
     assertEquals(id, upgraded.id());
-    assertEquals(id, auth.login("lama.student@test.id", "Password123!").id());
+    assertEquals(id, auth.login("lama@student.test.id", "Password123!").id());
   }
 
   @Test
-  void registrationChecksEmailMarkerAndUniqueNim() {
+  void registrationChecksDomainAndUniqueNim() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("Mahasiswa", "nama@test.id", "Password123!", false, "3125521053"));
+        () -> auth.register("Mahasiswa", "nama.student@test.id", "Password123!", false, "3125521053"));
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("Mahasiswa", "nama.student@test.id", "Password123!", false, "12345"));
+        () -> auth.register("Mahasiswa", "baru@student.test.id", "Password123!", false, "12345"));
     assertThrows(
         IllegalArgumentException.class,
         () ->
             auth.register(
-                "Mahasiswa", "nama.student@test.id", "Password123!", false, "3125521051"));
+                "Mahasiswa", "baru@student.test.id", "Password123!", false, "3125521051"));
     assertThrows(
-        IllegalArgumentException.class, () -> auth.login("nama.student@test.id", "Password123!"));
+        IllegalArgumentException.class, () -> auth.login("baru@student.test.id", "Password123!"));
+    assertThrows(IllegalArgumentException.class,
+        () -> auth.register("Mahasiswa", "baru@student.test.id.evil.net", "Password123!", false, "3125521053"));
+  }
+
+  @Test
+  void previousEmailFormatCanBeUpdatedWithExistingAcademicId() {
+    db.transaction(c -> {
+      update(c, "UPDATE users SET email=? WHERE id=?", "nama.student@test.id", student.id());
+      update(c, "UPDATE users SET email=? WHERE id=?", "dosen.lecturer@test.id", teacher.id());
+      return null;
+    });
+    assertThrows(AuthService.IdentityRequiredException.class,
+        () -> auth.login("nama.student@test.id", "Password123!"));
+    assertThrows(IllegalArgumentException.class,
+        () -> auth.completeIdentity("nama.student@test.id", "Password123!", student.email(), "3125521999"));
+    assertEquals(student.id(),
+        auth.completeIdentity("nama.student@test.id", "Password123!", student.email(), "3125521051").id());
+    assertEquals(room, service.classes(auth.login(student.email(), "Password123!")).getFirst().id("id"));
+    assertThrows(AuthService.IdentityRequiredException.class,
+        () -> auth.login("dosen.lecturer@test.id", "Password123!"));
+    assertEquals(teacher.id(),
+        auth.completeIdentity("dosen.lecturer@test.id", "Password123!", teacher.email(), "DOSEN-1").id());
+    assertInstanceOf(Lecturer.class, auth.login(teacher.email(), "Password123!"));
   }
 
   @Test
@@ -194,7 +219,7 @@ class QuestServiceTest {
 
   @Test
   void registerLoginAndPasswordSecurity() {
-    assertInstanceOf(Student.class, auth.login(" STUDENT@test.id ", "Password123!"));
+    assertInstanceOf(Student.class, auth.login(" NAMA@STUDENT.TEST.ID ", "Password123!"));
     assertInstanceOf(Lecturer.class, auth.login(teacher.email(), "Password123!"));
     String hash =
         db.read(
@@ -204,23 +229,23 @@ class QuestServiceTest {
     assertNotEquals("Password123!", hash);
     assertTrue(Passwords.verify("Password123!", hash));
     assertFalse(Passwords.verify("wrong", hash));
-    assertThrows(IllegalArgumentException.class, () -> auth.login("student@test.id", "wrong"));
+    assertThrows(IllegalArgumentException.class, () -> auth.login(student.email(), "wrong"));
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("X", "STUDENT@test.id", "Password123!", false, "3125521053"));
+        () -> auth.register("X", "NAMA@STUDENT.TEST.ID", "Password123!", false, "3125521053"));
   }
 
   @Test
   void registrationValidation() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("", "x.student@test.id", "Password123!", false, "3125521053"));
+        () -> auth.register("", "x@student.test.id", "Password123!", false, "3125521053"));
     assertThrows(
         IllegalArgumentException.class,
         () -> auth.register("X", "invalid", "Password123!", false, "3125521053"));
     assertThrows(
         IllegalArgumentException.class,
-        () -> auth.register("X", "x.student@test.id", "short", false, "3125521053"));
+        () -> auth.register("X", "x@student.test.id", "short", false, "3125521053"));
   }
 
   @Test

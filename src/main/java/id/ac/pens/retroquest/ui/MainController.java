@@ -223,7 +223,7 @@ public final class MainController {
     intro.setPadding(new Insets(50));
     intro.setPrefWidth(600);
     intro.getStyleClass().add("login-intro");
-    var email = field("nama.student@kampus.ac.id", "");
+    var email = field(auth.emailExample(false), "");
     var password = new PasswordField();
     password.setPromptText("Minimal 8 karakter");
     var name = field("Nama lengkap", "");
@@ -240,8 +240,7 @@ public final class MainController {
               identityLabel.setText(lecturer ? "NIP / NIDN DOSEN" : "NIM MAHASISWA");
               academicId.clear();
               academicId.setPromptText(lecturer ? "ID pada daftar dosen" : "10 angka NIM");
-              email.setPromptText(
-                  lecturer ? "nama.lecturer@kampus.ac.id" : "nama.student@kampus.ac.id");
+              email.setPromptText(auth.emailExample(lecturer));
             });
     var registration =
         column(
@@ -333,13 +332,14 @@ public final class MainController {
 
   private void completeIdentity(String oldEmail, String password) {
     var email =
-        field("nama.student@kampus.ac.id atau nama.lecturer@kampus.ac.id", oldEmail.strip());
+        field("Alamat email akademik yang baru", oldEmail.strip());
     var academicId = field("NIM mahasiswa atau NIP / NIDN dosen", "");
     var body =
         column(
             label("Lengkapi identitas akun lama Anda agar dapat melanjutkan.", "heading"),
             label(
-                "Gunakan penanda student atau lecturer pada bagian nama email sesuai peran akun.",
+                "Mahasiswa memakai " + auth.emailExample(false)
+                    + ". Dosen memakai " + auth.emailExample(true) + ".",
                 "muted"),
             input("EMAIL AKADEMIK", email),
             input("IDENTITAS AKADEMIK", academicId));

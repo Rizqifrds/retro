@@ -23,9 +23,10 @@ JAR harus disertai direktori `lib/` di sebelahnya. JavaFX memerlukan lingkungan 
 
 ## Validasi akun akademik
 
-- **Mahasiswa** memakai NIM 10 digit yang belum terdaftar dan email dengan penanda `student` di bagian nama, misalnya `nama.student@kampus.ac.id`.
-- **Dosen** memakai email dengan penanda `lecturer` dan ID yang cocok dengan daftar dosen. Isi `auth.lecturers` pada `config.properties` sebelum mendaftarkan akun dosen. Formatnya adalah pasangan `email=ID` yang dipisahkan koma. Contoh `auth.lecturers=nama.lecturer@kampus.ac.id=1234567890`. Untuk membatasi kedua peran ke satu domain, isi juga `auth.email.domain=kampus.ac.id`.
-- **Akun lama** dapat masuk dengan email dan kata sandi lama untuk membuka formulir **Lengkapi identitas akun**. Setelah tersimpan, gunakan email yang sudah diperbarui. Kelas, pengumpulan, dan EXP tetap terkait ke ID akun yang sama. Akun demo masih tersedia.
+- **Mahasiswa** memakai NIM unik 10 digit dan alamat pada subdomain `student`, seperti `nama@student.kampus.ac.id`.
+- **Dosen** memakai alamat langsung pada domain kampus, seperti `nama@kampus.ac.id`, dan ID yang cocok dengan daftar dosen. Isi `auth.lecturers=nama@kampus.ac.id=1234567890` pada `config.properties`. Pisahkan beberapa pasangan email dan ID dengan koma.
+- Untuk mengunci domain kedua peran, isi `auth.email.domain=kampus.ac.id` dengan domain dasar kampus. Aplikasi memeriksa domain dasar untuk dosen dan menambahkan awalan `student.` untuk mahasiswa.
+- **Akun lama** dengan format email sebelumnya dapat masuk memakai email dan kata sandi lama, lalu mengisi formulir **Lengkapi identitas akun** dengan alamat baru serta NIM atau ID dosen yang sama. Data kelas, tugas, dan EXP terhubung ke akun tersebut. Untuk dosen, perbarui alamat pada `auth.lecturers` sebelum memindahkan akun.
 
 Validasi ini memakai daftar dosen lokal dan pemeriksaan format serta keunikan NIM. Verifikasi kepemilikan email melalui OTP atau layanan kampus belum terhubung.
 

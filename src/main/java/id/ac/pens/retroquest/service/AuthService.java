@@ -93,8 +93,9 @@ public final class AuthService {
                   c,
                   "SELECT academic_id FROM account_identities WHERE user_id=?",
                   account.id("id"));
-          if (identities.isEmpty()) throw new IdentityRequiredException();
-          validateIdentity(address, role, identities.getFirst().text("academic_id"));
+          if (identities.isEmpty()
+              || !identityIsValid(address, role, identities.getFirst().text("academic_id")))
+            throw new IdentityRequiredException();
           return user(account.id("id"), account.text("name"), address, role);
         });
   }
@@ -105,11 +106,20 @@ public final class AuthService {
         c -> {
           Row account = authenticate(c, oldEmail, password, true);
           long id = account.id("id");
-          if (DemoData.matchesAccount(account.text("email"), account.text("role"), password)
-              || !list(c, "SELECT user_id FROM account_identities WHERE user_id=?", id).isEmpty())
-            throw new IllegalArgumentException("Pembaruan identitas ini khusus akun lama.");
           String role = account.text("role");
-          saveIdentity(c, id, role, validateIdentity(address, role, academicId));
+          if (DemoData.matchesAccount(account.text("email"), role, password))
+            throw new IllegalArgumentException("Pembaruan identitas ini khusus akun lama.");
+          var identities =
+              list(c, "SELECT academic_id FROM account_identities WHERE user_id=?", id);
+          if (identities.isEmpty()) {
+            saveIdentity(c, id, role, validateIdentity(address, role, academicId));
+          } else {
+            String existingId = identities.getFirst().text("academic_id");
+            if (identityIsValid(account.text("email"), role, existingId))
+              throw new IllegalArgumentException("Identitas akun ini sudah sesuai.");
+            if (!existingId.equals(validateIdentity(address, role, academicId)))
+              throw new IllegalArgumentException("Masukkan NIM atau ID dosen yang sudah terdaftar pada akun ini.");
+          }
           try {
             update(c, "UPDATE users SET email=? WHERE id=?", address, id);
           } catch (SQLIntegrityConstraintViolationException e) {
@@ -131,23 +141,35 @@ public final class AuthService {
     return rows.getFirst();
   }
 
+  private boolean identityIsValid(String email, String role, String academicId) {
+    try {
+      validateIdentity(email, role, academicId);
+      return true;
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+  }
+
+  public String emailExample(boolean lecturer) {
+    String baseDomain = campusDomain.isEmpty() ? "kampus.ac.id" : campusDomain;
+    return "nama@" + (lecturer ? baseDomain : "student." + baseDomain);
+  }
+
   private String validateIdentity(String email, String role, String academicId) {
-    int at = email.indexOf('@');
-    String domain = email.substring(at + 1);
+    String domain = email.substring(email.indexOf('@') + 1);
     if (domain.equals("retroquest.demo"))
       throw new IllegalArgumentException("Alamat retroquest.demo khusus akun demo.");
-    if (!campusDomain.isEmpty() && !domain.equals(campusDomain))
-      throw new IllegalArgumentException("Gunakan email pada domain " + campusDomain + ".");
-    Set<String> tokens = new HashSet<>(Arrays.asList(email.substring(0, at).split("[._+\\-]")));
     boolean lecturer = role.equals("LECTURER");
-    String marker = lecturer ? "lecturer" : "student";
-    if (!tokens.contains(marker) || tokens.contains(lecturer ? "student" : "lecturer"))
-      throw new IllegalArgumentException(
-          "Gunakan penanda "
-              + marker
-              + " pada nama email, misalnya nama."
-              + marker
-              + "@kampus.ac.id.");
+    boolean validDomain;
+    if (lecturer) {
+      validDomain = !Arrays.asList(domain.split("\\.")).contains("student")
+          && (campusDomain.isEmpty() || domain.equals(campusDomain));
+    } else {
+      validDomain = campusDomain.isEmpty() ? domain.matches("student\\.[^.]+(?:\\.[^.]+)+")
+          : domain.equals("student." + campusDomain);
+    }
+    if (!validDomain)
+      throw new IllegalArgumentException("Gunakan pola email " + emailExample(lecturer) + ".");
     String id = academicId == null ? "" : academicId.strip().toUpperCase(Locale.ROOT);
     if (lecturer) {
       if (!id.matches("[A-Z0-9-]{4,32}") || !id.equals(lecturerIds.get(email)))
